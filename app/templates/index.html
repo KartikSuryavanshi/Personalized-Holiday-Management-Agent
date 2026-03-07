@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Holiday Agent</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main class="page-wrap">
+      <section class="hero panel">
+        <p class="eyebrow">Multi-Agent Travel Intelligence</p>
+        <h1>Personalized Holiday Management Agent</h1>
+        <p class="subtitle">
+          Describe your trip idea in plain language. Planner + Researcher agents
+          will produce and validate a day-wise itinerary using free data sources.
+        </p>
+      </section>
+
+      <section class="panel form-panel">
+        <form action="/plan/ui" method="post" class="trip-form">
+          <label for="prompt">Trip Prompt</label>
+          <textarea id="prompt" name="prompt" rows="4" required placeholder="I want a 7-day trip to Japan focused on anime and food."></textarea>
+
+          <div class="grid two-cols">
+            <div>
+              <label for="days">Days</label>
+              <input id="days" name="days" type="number" min="1" max="21" value="7" required />
+            </div>
+            <div>
+              <label for="start_city">Start City (Optional)</label>
+              <input id="start_city" name="start_city" type="text" placeholder="Mumbai" />
+            </div>
+          </div>
+
+          <div class="grid two-cols">
+            <div>
+              <label for="budget_level">Budget</label>
+              <select id="budget_level" name="budget_level">
+                <option value="low">Low</option>
+                <option value="medium" selected>Medium</option>
+                <option value="high">High</option>
+              </select>
+            </div>
+            <div>
+              <label for="pace">Pace</label>
+              <select id="pace" name="pace">
+                <option value="relaxed">Relaxed</option>
+                <option value="balanced" selected>Balanced</option>
+                <option value="intense">Intense</option>
+              </select>
+            </div>
+          </div>
+
+          <label for="notes">Extra Notes (Optional)</label>
+          <input id="notes" name="notes" type="text" placeholder="No nightlife after 10 PM" />
+
+          <button type="submit">Generate Validated Plan</button>
+        </form>
+      </section>
+
+      {% if error %}
+      <section class="panel error-box">
+        <h2>Request Failed</h2>
+        <p>{{ error }}</p>
+      </section>
+      {% endif %}
+
+      {% if result %}
+      <section class="panel result-panel">
+        <div class="result-head">
+          <h2>{{ result.itinerary.destination_city }}, {{ result.itinerary.destination_country }}</h2>
+          <p>{{ result.itinerary.summary }}</p>
+          <p class="muted">Estimated Total Cost: ${{ result.itinerary.total_estimated_cost_usd or "N/A" }}</p>
+        </div>
+
+        {% if result.warnings %}
+        <div class="warning-box">
+          <h3>Validation Warnings</h3>
+          <div class="warning-items">{% for warning in result.warnings %}<p>{{ warning }}</p>{% endfor %}</div>
+        </div>
+        {% endif %}
+
+        <div class="day-grid">
+          {% for day in result.itinerary.days %}
+          <article class="day-card">
+            <h3>Day {{ day.day }}: {{ day.title }}</h3>
+            <p class="day-focus">{{ day.focus }}</p>
+
+            <div class="place-list">{% for place in day.places %}<article class="place-item"><strong>{{ place.start_time or "Flexible" }} - {{ place.name }}</strong><span>{{ place.area }} | {{ place.category }}</span><span>Duration: {{ place.duration_hours or "?" }} hrs | Cost: ${{ place.estimated_cost_usd or "?" }}</span><p>{{ place.reason }}</p></article>{% endfor %}</div>
+
+            {% if day.food_recommendations %}
+            <p><strong>Food:</strong> {{ day.food_recommendations | join(", ") }}</p>
+            {% endif %}
+            {% if day.transit_notes %}
+            <p><strong>Transit:</strong> {{ day.transit_notes | join(" | ") }}</p>
+            {% endif %}
+          </article>
+          {% endfor %}
+        </div>
+
+        <details class="validation-table">
+          <summary>Place Validation Snapshot ({{ result.place_validations|length }} checks)</summary>
+          <table>
+            <thead>
+              <tr>
+                <th>Place</th>
+                <th>Exists</th>
+                <th>Confidence</th>
+                <th>Opening Hours</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for check in result.place_validations[:20] %}
+              <tr>
+                <td>{{ check.place_name }}</td>
+                <td>{{ "Yes" if check.exists else "No" }}</td>
+                <td>{{ check.confidence }}</td>
+                <td>{{ check.opening_hours or "Unknown" }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </details>
+      </section>
+      {% endif %}
+    </main>
+  </body>
+</html>
