@@ -138,11 +138,14 @@ Example response highlights:
 PYTHONPATH=. pytest -q
 ```
 
-## Notes
+## Ui look
 
-- Provider-agnostic model interface using OpenAI-compatible client.
-- Default config is optimized for free local inference through Ollama.
-- Public data APIs can rate-limit; warnings are surfaced instead of silently failing.
+<img width="1396" height="698" alt="Screenshot 2026-03-08 at 3 15 49 PM" src="https://github.com/user-attachments/assets/6ea875a1-ada0-436d-8fc2-b2f4271a6d28" />
+<img width="1250" height="770" alt="Screenshot 2026-03-08 at 3 16 57 PM" src="https://github.com/user-attachments/assets/69707f03-d51b-4b4a-a291-4b490bcd672c" />
+
+
+<img width="1116" height="775" alt="Screenshot 2026-03-08 at 3 17 32 PM" src="https://github.com/user-attachments/assets/61afbf65-152c-420f-820a-be92af2d3cac" />
+
 
 ## Upgrade Ideas
 
