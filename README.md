@@ -1,38 +1,45 @@
 # Personalized Holiday Management Agent
 
-An autonomous multi-agent travel planner built with **Microsoft AutoGen**, **FastAPI**, and free data/model options.
+An autonomous multi-agent travel planner built with **Microsoft AutoGen**, **FastAPI**, and free model/data services.
 
 ## What This Project Solves
 
-Standard travel chatbots often hallucinate places and schedules. This project splits reasoning into specialized agents:
+Many travel assistants generate attractive but impractical plans. This project separates planning and factual validation, then hardens the final result so users always get complete itinerary details.
 
-- **Planner Agent**: Builds itinerary strategy and day plans.
-- **Researcher Agent**: Validates place existence and movement feasibility.
+- **Planner Agent** creates the day-by-day trip draft.
+- **Researcher Agent** verifies place feasibility and movement realism.
+- **Validation + Enrichment layer** fills missing time, duration, cost, and opening-hours fields.
 
-The final output is a structured itinerary with post-generation verification warnings.
+## End-to-End Project Flow
 
-## Architecture
+1. User submits a trip request from web UI (`/`) or CLI (`main.py`).
+2. FastAPI receives input at `POST /plan` (or `/plan/ui`) and validates `TripRequest`.
+3. `HolidayTeam` starts a `RoundRobinGroupChat` with Planner + Researcher agents.
+4. Planner and Researcher collaborate until `FINAL_ITINERARY_JSON` or max rounds.
+5. Raw model output is parsed into strict JSON (`ItineraryPlan`).
+6. If planner JSON is malformed, the recovery formatter rewrites transcript output into schema-valid JSON.
+7. Post-validation runs against free public data services: place existence via Nominatim, opening hours (when available) via Overpass, and inter-place travel duration/distance via OSRM.
+8. Deterministic enrichment fills missing itinerary fields: `start_time` (normalized and auto-scheduled), `duration_hours` (category + pace defaults), `estimated_cost_usd` (category + budget defaults), `opening_hours` (verified value or category fallback), and `total_estimated_cost_usd` (computed if missing).
+9. Final `PlanResponse` is returned to API clients and rendered in UI with warnings and validation snapshots.
 
-1. **Users Layer**
+## Architecture Layers
 
-Browser UI (`/` + form submit to `/plan/ui`)
-CLI (`main.py`)
+1. **Users Layer**: Browser UI (`/` + form submit to `/plan/ui`) and CLI (`main.py`).
+2. **API Layer (FastAPI)**: Routes in `app/api.py` with input/output validation via Pydantic schemas.
+3. **Orchestration Layer (AutoGen)**: Planner + Researcher in `RoundRobinGroupChat` with flow control and recovery in `app/orchestration/workflow.py`.
+4. **Support/Validation Layer**: Free API verification in `app/support/verifier.py`.
+5. **Presentation Layer**: Jinja template in `app/templates/index.html` and styling in `app/static/styles.css`.
 
-1. **API Layer (FastAPI)**
+## Key File Responsibilities
 
-Endpoint: `POST /plan`
-Validates `TripRequest` and returns `PlanResponse`
-
-1. **Orchestration Layer (AutoGen)**
-
-`RoundRobinGroupChat` with Planner and Researcher
-Termination on `FINAL_ITINERARY_JSON` token or max messages
-
-1. **Support Layer (Free Data Sources)**
-
-Place existence: OpenStreetMap Nominatim
-Opening hours (when available): Overpass API
-Route duration: OSRM
+- `app/config.py`: environment-driven runtime settings.
+- `app/schemas.py`: Pydantic contracts (`TripRequest`, `ItineraryPlan`, `PlanResponse`, validations).
+- `app/orchestration/prompts.py`: Planner/Researcher behavior contracts.
+- `app/orchestration/parsing.py`: robust final-JSON extraction.
+- `app/orchestration/workflow.py`: team orchestration, recovery, validation, and enrichment.
+- `app/support/verifier.py`: Nominatim/Overpass/OSRM integrations.
+- `app/api.py`: HTTP routes and UI rendering.
+- `main.py`: CLI entrypoint.
 
 ## Project Structure
 
@@ -59,9 +66,9 @@ requirements.txt
 tests/
 ```
 
-## Step-by-Step Setup (Free Model Path)
+## Setup (Free Local Model Path)
 
-1. Clone/open this project and create a virtual environment.
+1. Create and activate virtual environment.
 
 ```bash
 python3 -m venv .venv
@@ -69,34 +76,34 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-1. Install and start Ollama.
+2. Install and start Ollama.
 
 ```bash
-brew install ollama
+brew install --cask ollama
 ollama serve
 ```
 
-1. Pull a free local model (in a second terminal).
+3. Pull the default local model.
 
 ```bash
-ollama pull llama3.1:8b
+ollama pull llama3.2:3b
 ```
 
-1. Configure environment variables.
+4. Create local environment file.
 
 ```bash
 cp .env.example .env
 ```
 
-1. Run the API server.
+5. Start API server.
 
 ```bash
 uvicorn app:app --reload
 ```
 
-1. Open browser UI: <http://127.0.0.1:8000>
+6. Open web UI at <http://127.0.0.1:8000>
 
-1. Run CLI mode.
+7. Optional CLI run.
 
 ```bash
 python main.py "I want a 7-day trip to Japan focused on anime and food"
@@ -106,7 +113,7 @@ python main.py "I want a 7-day trip to Japan focused on anime and food"
 
 `POST /plan`
 
-Example JSON body:
+Example request:
 
 ```json
 {
@@ -119,15 +126,27 @@ Example JSON body:
 }
 ```
 
+Example response highlights:
+
+- `itinerary.days[].places[]` always includes `start_time`, `duration_hours`, `estimated_cost_usd`, `opening_hours`.
+- `place_validations` and `route_validations` provide factual checks.
+- `warnings` explains recoveries, data gaps, or long transfers.
+
+## Testing
+
+```bash
+PYTHONPATH=. pytest -q
+```
+
 ## Notes
 
-- The architecture is provider-agnostic and uses an OpenAI-compatible endpoint.
-- Defaults are configured for free local inference via Ollama.
-- Public APIs may rate-limit; warnings are returned when validation cannot complete.
+- Provider-agnostic model interface using OpenAI-compatible client.
+- Default config is optimized for free local inference through Ollama.
+- Public data APIs can rate-limit; warnings are surfaced instead of silently failing.
 
-## Next Upgrade Ideas
+## Upgrade Ideas
 
-- Add a `BudgetAgent` and `WeatherAgent`.
-- Cache external API responses in Redis.
-- Add persistent trip history storage.
-- Stream intermediate planner/researcher turns to UI.
+- Add `BudgetAgent` and `WeatherAgent`.
+- Add Redis cache for external validations.
+- Store trip history and edits.
+- Stream Planner/Researcher turns live to UI.
