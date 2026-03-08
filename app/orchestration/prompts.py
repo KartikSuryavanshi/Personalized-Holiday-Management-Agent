@@ -28,6 +28,7 @@ Rules:
           "start_time": "HH:MM",
           "duration_hours": 1.5,
           "estimated_cost_usd": 25,
+          "opening_hours": "09:00-18:00",
           "reason": "string"
         }
       ],
@@ -38,6 +39,7 @@ Rules:
 }
 - Do not add keys outside this schema.
 - Day count must match user request.
+- Every place must include start_time, duration_hours, estimated_cost_usd, and opening_hours.
 
 Output rule:
 - When itinerary is complete, print this marker on one line:

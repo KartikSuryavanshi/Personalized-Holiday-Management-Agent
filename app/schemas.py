@@ -24,6 +24,7 @@ class PlaceItem(BaseModel):
     start_time: str | None = None
     duration_hours: float | None = Field(default=None, ge=0.5, le=12.0)
     estimated_cost_usd: float | None = Field(default=None, ge=0.0)
+    opening_hours: str | None = None
     reason: str | None = None
 
 

@@ -1,5 +1,6 @@
 import json
 import inspect
+import re
 from typing import Any
 
 from autogen_agentchat.agents import AssistantAgent
@@ -24,6 +25,77 @@ from .prompts import PLANNER_SYSTEM_PROMPT, RESEARCHER_SYSTEM_PROMPT
 from .tools import ResearchTools
 
 FINAL_TOKEN = "FINAL_ITINERARY_JSON"
+DEFAULT_DAY_START_MINUTES = 9 * 60
+DEFAULT_TRANSFER_MINUTES = 30
+
+PACE_DURATION_MULTIPLIER = {
+    "relaxed": 1.15,
+    "balanced": 1.0,
+    "intense": 0.85,
+}
+
+BUDGET_COST_MULTIPLIER = {
+    "low": 0.75,
+    "medium": 1.0,
+    "high": 1.35,
+}
+
+CATEGORY_DURATION_HOURS = {
+    "landmark": 1.5,
+    "museum": 2.5,
+    "beach": 2.0,
+    "park": 1.5,
+    "market": 2.0,
+    "shopping": 2.0,
+    "temple": 1.0,
+    "mosque": 1.0,
+    "church": 1.0,
+    "fort": 2.0,
+    "station": 1.0,
+    "neighborhood": 2.0,
+    "food": 1.25,
+    "restaurant": 1.5,
+    "cafe": 1.0,
+    "default": 1.75,
+}
+
+CATEGORY_COST_USD = {
+    "landmark": 8.0,
+    "museum": 15.0,
+    "beach": 3.0,
+    "park": 3.0,
+    "market": 12.0,
+    "shopping": 25.0,
+    "temple": 4.0,
+    "mosque": 3.0,
+    "church": 3.0,
+    "fort": 10.0,
+    "station": 2.0,
+    "neighborhood": 8.0,
+    "food": 12.0,
+    "restaurant": 20.0,
+    "cafe": 8.0,
+    "default": 10.0,
+}
+
+CATEGORY_OPENING_HOURS = {
+    "landmark": "09:00-18:00 (typical)",
+    "museum": "10:00-18:00 (typical)",
+    "beach": "06:00-22:00 (typical)",
+    "park": "06:00-20:00 (typical)",
+    "market": "10:00-21:00 (typical)",
+    "shopping": "10:00-22:00 (typical)",
+    "temple": "06:00-21:00 (typical)",
+    "mosque": "05:00-22:00 (typical)",
+    "church": "07:00-20:00 (typical)",
+    "fort": "09:00-17:30 (typical)",
+    "station": "Open 24 hours",
+    "neighborhood": "Open area (no fixed hours)",
+    "food": "11:00-23:00 (typical)",
+    "restaurant": "12:00-23:00 (typical)",
+    "cafe": "08:00-22:00 (typical)",
+    "default": "09:00-20:00 (typical)",
+}
 
 
 class HolidayTeam:
@@ -79,6 +151,13 @@ class HolidayTeam:
             place_validations, route_validations, warnings = await self._post_validate(
                 itinerary=itinerary,
                 verifier=verifier,
+            )
+            warnings.extend(
+                self._enrich_itinerary(
+                    itinerary=itinerary,
+                    request=request,
+                    place_validations=place_validations,
+                )
             )
 
             if recovery_warning:
@@ -306,6 +385,188 @@ class HolidayTeam:
                     )
 
         return place_validations, route_validations, warnings
+
+    def _enrich_itinerary(
+        self,
+        itinerary: ItineraryPlan,
+        request: TripRequest,
+        place_validations: list[PlaceValidation],
+    ) -> list[str]:
+        """Backfill missing itinerary fields for reliable UI output."""
+
+        best_validation_by_name: dict[str, PlaceValidation] = {}
+        for validation in place_validations:
+            key = validation.place_name.strip().lower()
+            existing = best_validation_by_name.get(key)
+            if existing is None:
+                best_validation_by_name[key] = validation
+                continue
+
+            candidate_score = (
+                1 if validation.opening_hours else 0,
+                validation.confidence,
+            )
+            existing_score = (
+                1 if existing.opening_hours else 0,
+                existing.confidence,
+            )
+            if candidate_score > existing_score:
+                best_validation_by_name[key] = validation
+
+        budget_multiplier = BUDGET_COST_MULTIPLIER.get(request.budget_level, 1.0)
+        pace_multiplier = PACE_DURATION_MULTIPLIER.get(request.pace, 1.0)
+        auto_filled_fields = 0
+
+        for day in itinerary.days:
+            if day.places:
+                clock_minutes = self._parse_clock(day.places[0].start_time)
+            else:
+                clock_minutes = None
+
+            if clock_minutes is None:
+                clock_minutes = DEFAULT_DAY_START_MINUTES
+
+            for place in day.places:
+                category_key = self._categorize(place.category)
+
+                if place.duration_hours is None:
+                    base_duration = CATEGORY_DURATION_HOURS.get(
+                        category_key,
+                        CATEGORY_DURATION_HOURS["default"],
+                    )
+                    place.duration_hours = round(
+                        min(12.0, max(0.5, base_duration * pace_multiplier)),
+                        1,
+                    )
+                    auto_filled_fields += 1
+
+                if place.estimated_cost_usd is None:
+                    base_cost = CATEGORY_COST_USD.get(
+                        category_key,
+                        CATEGORY_COST_USD["default"],
+                    )
+                    place.estimated_cost_usd = round(
+                        max(0.0, base_cost * budget_multiplier),
+                        2,
+                    )
+                    auto_filled_fields += 1
+
+                if not place.opening_hours:
+                    validation = best_validation_by_name.get(place.name.strip().lower())
+                    if validation and validation.opening_hours:
+                        place.opening_hours = validation.opening_hours
+                    else:
+                        place.opening_hours = CATEGORY_OPENING_HOURS.get(
+                            category_key,
+                            CATEGORY_OPENING_HOURS["default"],
+                        )
+                    auto_filled_fields += 1
+
+                parsed_time = self._parse_clock(place.start_time)
+                if parsed_time is None:
+                    place.start_time = self._format_clock(clock_minutes)
+                    parsed_time = clock_minutes
+                    auto_filled_fields += 1
+                else:
+                    # Normalize planner time string for consistent rendering.
+                    place.start_time = self._format_clock(parsed_time)
+
+                duration_hours = place.duration_hours or CATEGORY_DURATION_HOURS["default"]
+                stay_minutes = int(round(duration_hours * 60))
+                clock_minutes = parsed_time + stay_minutes + DEFAULT_TRANSFER_MINUTES
+
+        if itinerary.total_estimated_cost_usd is None:
+            total_cost = sum(
+                (place.estimated_cost_usd or 0.0)
+                for day in itinerary.days
+                for place in day.places
+            )
+            if total_cost > 0.0:
+                itinerary.total_estimated_cost_usd = round(total_cost, 2)
+                auto_filled_fields += 1
+
+        if auto_filled_fields == 0:
+            return []
+
+        return [
+            (
+                "Planner omitted some fields. Auto-filled schedule, duration, cost, "
+                "and opening-hours values for complete output."
+            )
+        ]
+
+    @staticmethod
+    def _categorize(raw_category: str) -> str:
+        normalized = raw_category.strip().lower()
+
+        keyword_map = {
+            "museum": "museum",
+            "gallery": "museum",
+            "beach": "beach",
+            "park": "park",
+            "garden": "park",
+            "market": "market",
+            "bazaar": "market",
+            "shopping": "shopping",
+            "mall": "shopping",
+            "temple": "temple",
+            "mosque": "mosque",
+            "church": "church",
+            "cathedral": "church",
+            "fort": "fort",
+            "palace": "fort",
+            "station": "station",
+            "neighborhood": "neighborhood",
+            "district": "neighborhood",
+            "food": "food",
+            "restaurant": "restaurant",
+            "cafe": "cafe",
+            "landmark": "landmark",
+            "monument": "landmark",
+        }
+
+        for keyword, category in keyword_map.items():
+            if keyword in normalized:
+                return category
+
+        return "default"
+
+    @staticmethod
+    def _parse_clock(value: str | None) -> int | None:
+        if value is None:
+            return None
+
+        text = value.strip().lower()
+        if not text:
+            return None
+
+        twenty_four_hour_match = re.match(r"^([01]?\d|2[0-3]):([0-5]\d)$", text)
+        if twenty_four_hour_match:
+            hour = int(twenty_four_hour_match.group(1))
+            minute = int(twenty_four_hour_match.group(2))
+            return (hour * 60) + minute
+
+        am_pm_match = re.match(r"^(\d{1,2})(?::([0-5]\d))?\s*([ap]m)$", text)
+        if am_pm_match:
+            hour = int(am_pm_match.group(1))
+            minute = int(am_pm_match.group(2) or "0")
+            suffix = am_pm_match.group(3)
+            if hour < 1 or hour > 12:
+                return None
+            if suffix == "pm" and hour != 12:
+                hour += 12
+            if suffix == "am" and hour == 12:
+                hour = 0
+            return (hour * 60) + minute
+
+        return None
+
+    @staticmethod
+    def _format_clock(total_minutes: int) -> str:
+        normalized = total_minutes % (24 * 60)
+        hours = normalized // 60
+        minutes = normalized % 60
+        return f"{hours:02d}:{minutes:02d}"
 
     @staticmethod
     def _stringify_message(message: Any) -> str:

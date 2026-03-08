@@ -90,7 +90,17 @@
             <h3>Day {{ day.day }}: {{ day.title }}</h3>
             <p class="day-focus">{{ day.focus }}</p>
 
-            <div class="place-list">{% for place in day.places %}<article class="place-item"><strong>{{ place.start_time or "Flexible" }} - {{ place.name }}</strong><span>{{ place.area }} | {{ place.category }}</span><span>Duration: {{ place.duration_hours or "?" }} hrs | Cost: ${{ place.estimated_cost_usd or "?" }}</span><p>{{ place.reason }}</p></article>{% endfor %}</div>
+            <div class="place-list">
+              {% for place in day.places %}
+              <article class="place-item">
+                <strong>{{ place.start_time or "09:00" }} - {{ place.name }}</strong>
+                <span>{{ place.area }} | {{ place.category }}</span>
+                <span>Duration: {{ place.duration_hours or "1.5" }} hrs | Cost: ${{ place.estimated_cost_usd or "10" }}</span>
+                <span>Opening: {{ place.opening_hours or "09:00-20:00 (typical)" }}</span>
+                <p>{{ place.reason }}</p>
+              </article>
+              {% endfor %}
+            </div>
 
             {% if day.food_recommendations %}
             <p><strong>Food:</strong> {{ day.food_recommendations | join(", ") }}</p>
