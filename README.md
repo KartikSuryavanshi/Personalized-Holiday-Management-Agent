@@ -138,18 +138,26 @@ Example response highlights:
 PYTHONPATH=. pytest -q
 ```
 
-## Ui look
+## UI Preview
 
-<img width="1396" height="698" alt="Screenshot 2026-03-08 at 3 15 49 PM" src="https://github.com/user-attachments/assets/6ea875a1-ada0-436d-8fc2-b2f4271a6d28" />
-<img width="1250" height="770" alt="Screenshot 2026-03-08 at 3 16 57 PM" src="https://github.com/user-attachments/assets/69707f03-d51b-4b4a-a291-4b490bcd672c" />
+The web UI is designed to make itinerary generation and verification easy to follow.
+
+### 1. Trip Input Form
+
+Users can enter prompt, days, budget, pace, and notes from a single form.
+
+![Trip input form](https://github.com/user-attachments/assets/6ea875a1-ada0-436d-8fc2-b2f4271a6d28)
+
+### 2. Generated Itinerary View
+
+The app returns day-wise cards with timings, duration, cost, and opening-hours details.
+
+![Generated itinerary view](https://github.com/user-attachments/assets/69707f03-d51b-4b4a-a291-4b490bcd672c)
+
+### 3. Validation and Warnings Snapshot
+
+Users can inspect validation warnings and factual checks for places and routes.
+
+![Validation and warnings snapshot](https://github.com/user-attachments/assets/61afbf65-152c-420f-820a-be92af2d3cac)
 
 
-<img width="1116" height="775" alt="Screenshot 2026-03-08 at 3 17 32 PM" src="https://github.com/user-attachments/assets/61afbf65-152c-420f-820a-be92af2d3cac" />
-
-
-## Upgrade Ideas
-
-- Add `BudgetAgent` and `WeatherAgent`.
-- Add Redis cache for external validations.
-- Store trip history and edits.
-- Stream Planner/Researcher turns live to UI.
