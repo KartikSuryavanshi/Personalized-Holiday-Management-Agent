@@ -142,19 +142,19 @@ PYTHONPATH=. pytest -q
 
 The web UI is designed to make itinerary generation and verification easy to follow.
 
-### 1. Trip Input Form:
+### 1. Trip Input Form-
 
 Users can enter prompt, days, budget, pace, and notes from a single form.
 
 ![Trip input form](https://github.com/user-attachments/assets/6ea875a1-ada0-436d-8fc2-b2f4271a6d28)
 
-### 2. Generated Itinerary View:
+### 2. Generated Itinerary View-
 
 The app returns day-wise cards with timings, duration, cost, and opening-hours details.
 
 ![Generated itinerary view](https://github.com/user-attachments/assets/69707f03-d51b-4b4a-a291-4b490bcd672c)
 
-### 3. Validation and Warnings Snapshot:
+### 3. Validation and Warnings Snapshot-
 
 Users can inspect validation warnings and factual checks for places and routes.
 
