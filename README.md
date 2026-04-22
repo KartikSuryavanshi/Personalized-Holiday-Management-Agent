@@ -1,6 +1,6 @@
 # Personalized Holiday Management Agent
 
-An autonomous multi-agent travel planner built with **Microsoft AutoGen**, **FastAPI**, and free model/data services.
+An autonomous multi-agent travel planner built with **Microsoft AutoGen**, **FastAPI**, and free model services.
 
 ## What This Project Solves
 
